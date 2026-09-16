@@ -9,7 +9,6 @@ import {
   Check,
   ChevronRight,
   Download,
-  ExternalLink,
   FileSpreadsheet,
   Leaf,
   LocateFixed,
@@ -33,12 +32,6 @@ import type { TreeReference } from "@/lib/tree-types";
 type PermissionState = "idle" | "requesting" | "granted" | "partial" | "denied";
 type LocationState = "idle" | "locating" | "ready" | "error";
 type StepId = 1 | 2 | 3 | 4 | 5;
-
-type SpeciesCandidate = {
-  name: string;
-  confidence: number;
-  reason: string;
-};
 
 type SurveyRecord = {
   id: string;
@@ -65,12 +58,6 @@ const steps: { id: StepId; label: string }[] = [
   { id: 5, label: "成果" },
 ];
 
-const sampleCandidates: SpeciesCandidate[] = [
-  { name: "樟樹", confidence: 0.82, reason: "葉形、校園常見樹種與清冊資料相符" },
-  { name: "榕樹", confidence: 0.67, reason: "樹冠與枝幹型態相近，需由教師確認" },
-  { name: "黑板樹", confidence: 0.54, reason: "高度與葉片排列可能吻合" },
-];
-
 export default function Home() {
   const [step, setStep] = useState<StepId>(1);
   const [permission, setPermission] = useState<PermissionState>("idle");
@@ -86,10 +73,7 @@ export default function Home() {
   const [usingSampleData, setUsingSampleData] = useState(true);
   const [uploadError, setUploadError] = useState("");
   const [cameraActive, setCameraActive] = useState(false);
-  const [aiRunning, setAiRunning] = useState(false);
-  const [candidates, setCandidates] = useState<SpeciesCandidate[]>([]);
-  const [geminiMessage, setGeminiMessage] = useState("");
-  const [confirmedSpecies, setConfirmedSpecies] = useState(sampleTreeReferences[0]?.speciesCommonName ?? "");
+  const [confirmedSpecies, setConfirmedSpecies] = useState(canonicalSpeciesName(sampleTreeReferences[0]?.speciesCommonName ?? ""));
   const [selectedTreeId, setSelectedTreeId] = useState(sampleTreeReferences[0]?.sourceId ?? "");
   const [dbhCm, setDbhCm] = useState(sampleTreeReferences[0]?.dbhCm ? String(sampleTreeReferences[0].dbhCm) : "");
   const [heightM, setHeightM] = useState(sampleTreeReferences[0]?.heightM ? String(sampleTreeReferences[0].heightM) : "");
@@ -131,6 +115,14 @@ export default function Home() {
     return [...counts.entries()]
       .map(([name, count]) => ({ name, count }))
       .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, "zh-Hant"));
+  }, [treeRows]);
+  const uniqueTreeOptions = useMemo(() => {
+    const options = new Map<string, TreeReference>();
+    for (const tree of treeRows) {
+      const name = canonicalSpeciesName(tree.speciesCommonName);
+      if (name && !options.has(name)) options.set(name, tree);
+    }
+    return [...options.entries()].map(([name, tree]) => ({ name, tree }));
   }, [treeRows]);
   const readyCount = readiness.filter(Boolean).length;
   const canStartAI = readyCount === 3;
@@ -183,7 +175,7 @@ export default function Home() {
       setTreeRows(normalized);
       setUsingSampleData(false);
       setSelectedTreeId(normalized[0]?.sourceId ?? "");
-      setConfirmedSpecies(normalized[0]?.speciesCommonName ?? "");
+      setConfirmedSpecies(canonicalSpeciesName(normalized[0]?.speciesCommonName ?? ""));
       if (normalized[0]?.dbhCm) setDbhCm(String(normalized[0].dbhCm));
       if (normalized[0]?.heightM) setHeightM(String(normalized[0].heightM));
       if (normalized.length === 0) setUploadError("檔案中沒有可辨識的樹木資料，請確認第一列是欄位名稱。");
@@ -206,40 +198,19 @@ export default function Home() {
     }
   }
 
-  async function runMockAI() {
-    setAiRunning(true);
-    await new Promise((resolve) => setTimeout(resolve, 900));
-    const campusSpecies = treeRows.map((tree) => tree.speciesCommonName).filter(Boolean);
-    const ranked = campusSpecies.length
-      ? campusSpecies.slice(0, 3).map((name, index) => ({
-          name,
-          confidence: [0.86, 0.69, 0.53][index] ?? 0.48,
-          reason: index === 0 ? "此樹種存在於已上傳校園清冊，且位置最接近。" : "清冊中有相近紀錄，建議現場比對葉片與樹皮。",
-        }))
-      : sampleCandidates;
-    setCandidates(ranked);
-    setConfirmedSpecies(ranked[0]?.name ?? "");
-    setAiRunning(false);
+  function enterManualConfirmation() {
+    if (!confirmedSpecies && uniqueTreeOptions[0]) {
+      applyTreeSelection(uniqueTreeOptions[0].tree.sourceId);
+    }
     setStep(3);
   }
 
-  async function openGeminiLive() {
-    const campusSpecies = speciesSummary.slice(0, 20).map((item) => item.name).join("、");
-    const prompt = [
-      "請用繁體中文協助確認校園樹木種類。",
-      "請我用 iPad 鏡頭依序拍攝葉片正反面、枝條、樹皮、整棵樹冠，並提出觀察問題。",
-      `本校清冊常見樹種包含：${campusSpecies || "請依現場影像判斷"}`,
-      "請先給 3 個可能樹種，說明辨識依據，最後提醒我回到 TreeCarbon EDU 填入確認樹種。",
-    ].join("\n");
-
-    try {
-      await navigator.clipboard.writeText(prompt);
-      setGeminiMessage("已複製確認提示詞，請在 Gemini 貼上後開啟 Live。");
-    } catch {
-      setGeminiMessage("已開啟 Gemini。若無法自動複製，請口頭請 Gemini 協助確認樹種。");
-    }
-
-    window.open("https://gemini.google.com/app", "_blank", "noopener,noreferrer");
+  function applyTreeSelection(sourceId: string) {
+    const tree = treeRows.find((item) => item.sourceId === sourceId);
+    setSelectedTreeId(sourceId);
+    setConfirmedSpecies(canonicalSpeciesName(tree?.speciesCommonName ?? ""));
+    if (tree?.dbhCm) setDbhCm(String(tree.dbhCm));
+    if (tree?.heightM) setHeightM(String(tree.heightM));
   }
 
   function saveRecord() {
@@ -277,8 +248,7 @@ export default function Home() {
 
   function resetSurvey() {
     setCameraActive(false);
-    setCandidates([]);
-    setConfirmedSpecies(selectedTree?.speciesCommonName ?? "");
+    setConfirmedSpecies(canonicalSpeciesName(selectedTree?.speciesCommonName ?? ""));
     setDbhCm(selectedTree?.dbhCm ? String(selectedTree.dbhCm) : "");
     setHeightM(selectedTree?.heightM ? String(selectedTree.heightM) : "");
     setNote("");
@@ -413,7 +383,7 @@ export default function Home() {
             <div>
               <p className="eyebrow">步驟 2</p>
               <h1 className="page-title">拍攝樹冠、樹皮與葉片</h1>
-              <p className="page-lead">V1 使用 mock AI，不會外傳照片或使用 API key。系統會優先參考你剛上傳的校園清冊產生 Top 3 候選。</p>
+              <p className="page-lead">本專案改採人工點選物種，不會外傳照片或使用 API key。請拍攝葉片、樹皮與樹冠後，回到下一步從清冊樹種手動確認。</p>
               <div className="camera-stage">
                 <video ref={videoRef} playsInline muted className={cameraActive ? "camera-video" : "hidden"} />
                 {!cameraActive && (
@@ -426,21 +396,14 @@ export default function Home() {
                 <Badge className="camera-badge"><MapPin /> 清冊 {treeRows.length} 筆</Badge>
                 <div className="camera-actions">
                   <Button variant="secondary" onClick={startCamera}><Camera /> 開啟相機</Button>
-                  <Button onClick={runMockAI} disabled={aiRunning}><Sparkles /> {aiRunning ? "辨識中" : "模擬 AI 辨識"}</Button>
-                  <Button className="wide-action" variant="outline" onClick={openGeminiLive}><ExternalLink /> 開新頁面用 Gemini Live 確認</Button>
+                  <Button onClick={enterManualConfirmation}><Sparkles /> 進入人工確認</Button>
                 </div>
               </div>
             </div>
             <aside className="guide-panel">
               <Sparkles />
-              <h2>辨識不是最終答案</h2>
-              <p>AI 只提供候選樹種。請學生觀察葉形、樹皮、樹高與清冊位置，再由學生或教師確認。</p>
-              <div className="gemini-live-card">
-                <strong>Gemini Live 現場互動</strong>
-                <p>在 iPad 或 iPhone 開新頁面到 Gemini，貼上提示詞後點 Live 或向左滑，用鏡頭與語音確認葉片、樹皮與樹冠。</p>
-                <Button variant="outline" onClick={openGeminiLive}><ExternalLink /> 開啟 Gemini</Button>
-                {geminiMessage && <span>{geminiMessage}</span>}
-              </div>
+              <h2>人工確認樹種</h2>
+              <p>請學生觀察葉形、樹皮、樹高與位置，再由學生或教師在下一步從清冊樹種中手動點選確認。</p>
               <div className="mini-list">
                 <span>拍攝葉片近照</span>
                 <span>拍攝樹幹紋理</span>
@@ -454,30 +417,23 @@ export default function Home() {
           <section className="work-grid">
             <div>
               <p className="eyebrow">步驟 3</p>
-              <h1 className="page-title">確認這棵樹是哪一種</h1>
-              <div className="candidate-list">
-                {(candidates.length ? candidates : sampleCandidates).map((candidate) => (
-                  <button
-                    key={candidate.name}
-                    className={`candidate ${confirmedSpecies === candidate.name ? "selected" : ""}`}
-                    onClick={() => setConfirmedSpecies(candidate.name)}
-                  >
-                    <span>{Math.round(candidate.confidence * 100)}%</span>
-                    <div>
-                      <strong>{candidate.name}</strong>
-                      <p>{candidate.reason}</p>
-                    </div>
-                    {confirmedSpecies === candidate.name && <Check />}
-                  </button>
-                ))}
+              <h1 className="page-title">人工點選物種</h1>
+              <div className="manual-panel">
+                <strong>{confirmedSpecies || "尚未選擇樹種"}</strong>
+                <p>請在右側從本校清冊樹名中手動點選。清冊中重複出現的樹名只會顯示一次，並且已移除前方樹種編號。</p>
+                <div className="mini-list">
+                  <span>觀察葉片形狀與排列</span>
+                  <span>比對樹皮紋理與樹冠</span>
+                  <span>由學生或教師點選確認</span>
+                </div>
               </div>
             </div>
             <aside className="form-panel">
-              <label className="field-label" htmlFor="treeSelect">對應清冊紀錄</label>
-              <select id="treeSelect" value={selectedTreeId} onChange={(event) => setSelectedTreeId(event.target.value)}>
-                {treeRows.map((tree) => (
-                  <option key={tree.sourceId} value={tree.sourceId}>
-                    {tree.sourceId} {tree.speciesCommonName ? `- ${tree.speciesCommonName}` : ""}
+              <label className="field-label" htmlFor="treeSelect">清冊樹名</label>
+              <select id="treeSelect" value={selectedTreeId} onChange={(event) => applyTreeSelection(event.target.value)}>
+                {uniqueTreeOptions.map((option) => (
+                  <option key={option.name} value={option.tree.sourceId}>
+                    {option.name}
                   </option>
                 ))}
               </select>
@@ -759,6 +715,10 @@ function findValue(row: Record<string, unknown>, keys: string[]) {
 
 function normalizeKey(key: string) {
   return key.toLowerCase().replace(/[\s()（）_-]/g, "");
+}
+
+function canonicalSpeciesName(name: string) {
+  return name.replace(/^\s*\d{3,6}\s+/, "").trim();
 }
 
 function toNumber(value: string) {
