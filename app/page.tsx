@@ -2,6 +2,7 @@
 
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 import Papa from "papaparse";
+import QRCode from "qrcode";
 import * as XLSX from "xlsx";
 import {
   Camera,
@@ -53,6 +54,7 @@ type SurveyRecord = {
 };
 
 const storageKey = "treecarbon-edu-records-v1";
+const remoteAppUrl = "https://tree-carbon-edu.hsiehpangg.chatgpt.site";
 
 const steps: { id: StepId; label: string }[] = [
   { id: 1, label: "準備" },
@@ -87,6 +89,7 @@ export default function Home() {
   const [dbhCm, setDbhCm] = useState(sampleTreeReferences[0]?.dbhCm ? String(sampleTreeReferences[0].dbhCm) : "");
   const [heightM, setHeightM] = useState(sampleTreeReferences[0]?.heightM ? String(sampleTreeReferences[0].heightM) : "");
   const [note, setNote] = useState("");
+  const [remoteQrCode, setRemoteQrCode] = useState("");
   const [records, setRecords] = useState<SurveyRecord[]>(() => {
     if (typeof window === "undefined") return [];
     const raw = window.localStorage.getItem(storageKey);
@@ -97,6 +100,18 @@ export default function Home() {
   useEffect(() => {
     localStorage.setItem(storageKey, JSON.stringify(records));
   }, [records]);
+
+  useEffect(() => {
+    QRCode.toDataURL(remoteAppUrl, {
+      errorCorrectionLevel: "M",
+      margin: 1,
+      scale: 7,
+      color: {
+        dark: "#203a30",
+        light: "#ffffff",
+      },
+    }).then(setRemoteQrCode);
+  }, []);
 
   const readiness = useMemo(
     () => [permission === "granted" || permission === "partial", schoolConfirmed, treeRows.length > 0],
@@ -285,10 +300,22 @@ export default function Home() {
                   這個版本不會預載學校資料。請在 iPad 或手機現場手動上傳校園樹木清冊，再進入拍照辨識、胸徑量測與碳匯估算。
                 </p>
               </div>
-              <div className="readiness-card">
-                <span>完成狀態</span>
-                <strong>{readyCount} / 3</strong>
-                <Progress value={(readyCount / 3) * 100} />
+              <div className="intro-side">
+                <div className="readiness-card">
+                  <span>完成狀態</span>
+                  <strong>{readyCount} / 3</strong>
+                  <Progress value={(readyCount / 3) * 100} />
+                </div>
+                <div className="qr-card">
+                  <span>手機 / iPad 掃描登入</span>
+                  {remoteQrCode ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={remoteQrCode} alt="TreeCarbon EDU 遠端 webapp QR Code" />
+                  ) : (
+                    <div className="qr-placeholder" />
+                  )}
+                  <a href={remoteAppUrl} target="_blank" rel="noreferrer">{remoteAppUrl.replace("https://", "")}</a>
+                </div>
               </div>
             </section>
 

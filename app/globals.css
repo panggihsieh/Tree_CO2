@@ -169,10 +169,51 @@ button { min-height: 44px; }
   background: #203a30;
   border-radius: 8px;
 }
+.intro-side {
+  width: 230px;
+  flex: none;
+  display: grid;
+  gap: 12px;
+}
+.intro-side .readiness-card { width: 100%; }
 .readiness-card span { color: #bdd0c4; font-size: 12px; }
 .readiness-card strong { float: right; font-size: 18px; }
 .readiness-card [data-slot="progress"] { clear: both; margin-top: 14px; height: 8px; background: rgba(255,255,255,.2); }
 .readiness-card [data-slot="progress-indicator"] { background: #9bd18d; }
+.qr-card {
+  padding: 14px;
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  color: #203a30;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 12px 28px rgba(40, 56, 45, .08);
+}
+.qr-card span {
+  font-size: 13px;
+  font-weight: 800;
+}
+.qr-card img {
+  width: 156px;
+  height: 156px;
+  image-rendering: pixelated;
+}
+.qr-card a {
+  max-width: 100%;
+  color: #42614f;
+  font-size: 11px;
+  text-align: center;
+  overflow-wrap: anywhere;
+  text-decoration: none;
+}
+.qr-placeholder {
+  width: 156px;
+  height: 156px;
+  border-radius: 8px;
+  background: #edf1ed;
+}
 
 .setup-grid {
   display: grid;
@@ -477,7 +518,7 @@ button { min-height: 44px; }
   .step b { display: none; }
   .content-wrap { padding: 24px 14px 46px; }
   .intro-row, .next-panel { display: block; }
-  .readiness-card { width: 100%; margin-top: 16px; }
+  .intro-side { width: 100%; margin-top: 16px; }
   .page-title { font-size: 32px; }
   .next-panel button { width: 100%; margin-top: 14px; }
   .dual-actions, .camera-actions { grid-template-columns: 1fr; }
