@@ -288,7 +288,7 @@ export default function Home() {
   return (
     <main className="app-shell">
       <header className="topbar">
-        <div className="brand">
+        <button className="brand" type="button" onClick={() => setStep(1)} aria-label="回到首頁">
           <span className="brand-mark">
             <Trees />
           </span>
@@ -296,7 +296,7 @@ export default function Home() {
             <strong>TreeCarbon EDU</strong>
             <small>校園樹木碳匯調查</small>
           </div>
-        </div>
+        </button>
         <Badge variant="outline" className="device-badge">iPad / 手機現場版</Badge>
       </header>
 

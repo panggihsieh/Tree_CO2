@@ -78,7 +78,22 @@ button { min-height: 44px; }
   border-bottom: 1px solid var(--border);
   backdrop-filter: blur(12px);
 }
-.brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.brand {
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 2px 8px 2px 2px;
+  color: inherit;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+}
+.brand:hover { background: #f1f5ef; }
+.brand:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
 .brand-mark {
   width: 44px;
   height: 44px;
