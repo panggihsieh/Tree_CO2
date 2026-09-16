@@ -73,6 +73,9 @@ const sampleCandidates: SpeciesCandidate[] = [
 export default function Home() {
   const [step, setStep] = useState<StepId>(1);
   const [permission, setPermission] = useState<PermissionState>("idle");
+  const [cameraReady, setCameraReady] = useState(false);
+  const [motionReady, setMotionReady] = useState(false);
+  const [motionMessage, setMotionMessage] = useState("尚未檢查");
   const [location, setLocation] = useState<LocationState>("idle");
   const [schoolName, setSchoolName] = useState(sampleSchoolName);
   const [schoolConfirmed, setSchoolConfirmed] = useState(false);
@@ -114,8 +117,8 @@ export default function Home() {
   }, []);
 
   const readiness = useMemo(
-    () => [permission === "granted" || permission === "partial", schoolConfirmed, treeRows.length > 0],
-    [permission, schoolConfirmed, treeRows.length],
+    () => [cameraReady || motionReady, schoolConfirmed, treeRows.length > 0],
+    [cameraReady, motionReady, schoolConfirmed, treeRows.length],
   );
   const speciesSummary = useMemo(() => {
     const counts = new Map<string, number>();
@@ -135,9 +138,13 @@ export default function Home() {
 
   async function requestPermissions() {
     setPermission("requesting");
-    let cameraOK = false;
-    let motionOK = false;
+    setMotionMessage("請允許動作與方向感測，並輕輕晃動裝置");
 
+    const motionOK = await requestMotionPermissionAndVerify();
+    setMotionReady(motionOK);
+    setMotionMessage(motionOK ? "已收到感測資料" : "未收到感測資料，請確認 Safari 已允許動作與方向取用");
+
+    let cameraOK = false;
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false });
       stream.getTracks().forEach((track) => track.stop());
@@ -145,17 +152,9 @@ export default function Home() {
     } catch {
       cameraOK = false;
     }
+    setCameraReady(cameraOK);
 
-    try {
-      const motionEvent = DeviceMotionEvent as typeof DeviceMotionEvent & {
-        requestPermission?: () => Promise<"granted" | "denied">;
-      };
-      motionOK = motionEvent.requestPermission ? (await motionEvent.requestPermission()) === "granted" : "DeviceMotionEvent" in window;
-    } catch {
-      motionOK = false;
-    }
-
-    setPermission(cameraOK && motionOK ? "granted" : cameraOK ? "partial" : "denied");
+    setPermission(cameraOK && motionOK ? "granted" : cameraOK || motionOK ? "partial" : "denied");
   }
 
   function requestLocation() {
@@ -322,8 +321,8 @@ export default function Home() {
             <section className="setup-grid">
               <SetupPanel icon={<Move3d />} title="裝置權限" done={readiness[0]}>
                 <p>開啟相機與動作感測，讓學生能在戶外用後鏡頭拍攝樹木。iOS 會跳出授權視窗。</p>
-                <StatusLine label="相機" ok={permission === "granted" || permission === "partial"} />
-                <StatusLine label="動作感測" ok={permission === "granted"} />
+                <StatusLine label="相機" ok={cameraReady} />
+                <StatusLine label="動作感測" ok={motionReady} detail={motionMessage} />
                 <Button className="panel-action" onClick={requestPermissions} disabled={permission === "requesting"}>
                   <ShieldCheck /> {permission === "requesting" ? "正在要求權限" : "檢查裝置權限"}
                 </Button>
@@ -536,13 +535,61 @@ function SetupPanel({ icon, title, done, children }: { icon: React.ReactNode; ti
   );
 }
 
-function StatusLine({ label, ok }: { label: string; ok: boolean }) {
+function StatusLine({ label, ok, detail }: { label: string; ok: boolean; detail?: string }) {
   return (
     <div className="status-line">
-      <span>{label}</span>
+      <span>
+        {label}
+        {detail && <small>{detail}</small>}
+      </span>
       <em className={ok ? "ok" : ""}>{ok ? "已就緒" : "待授權"}</em>
     </div>
   );
+}
+
+async function requestMotionPermissionAndVerify() {
+  if (!("DeviceMotionEvent" in window) && !("DeviceOrientationEvent" in window)) return false;
+
+  const motionPermission = await requestIosSensorPermission("DeviceMotionEvent");
+  const orientationPermission = await requestIosSensorPermission("DeviceOrientationEvent");
+  if (motionPermission === "denied" || orientationPermission === "denied") return false;
+
+  return new Promise<boolean>((resolve) => {
+    let resolved = false;
+    const finish = (value: boolean) => {
+      if (resolved) return;
+      resolved = true;
+      window.removeEventListener("devicemotion", onMotion);
+      window.removeEventListener("deviceorientation", onOrientation);
+      resolve(value);
+    };
+    const onMotion = (event: DeviceMotionEvent) => {
+      const acceleration = event.accelerationIncludingGravity;
+      if (acceleration && [acceleration.x, acceleration.y, acceleration.z].some((value) => typeof value === "number")) finish(true);
+    };
+    const onOrientation = (event: DeviceOrientationEvent) => {
+      if ([event.alpha, event.beta, event.gamma].some((value) => typeof value === "number")) finish(true);
+    };
+
+    window.addEventListener("devicemotion", onMotion, { once: false });
+    window.addEventListener("deviceorientation", onOrientation, { once: false });
+    window.setTimeout(() => finish(false), 2500);
+  });
+}
+
+async function requestIosSensorPermission(eventName: "DeviceMotionEvent" | "DeviceOrientationEvent") {
+  const sensorEvent = window[eventName] as
+    | {
+        requestPermission?: () => Promise<"granted" | "denied">;
+      }
+    | undefined;
+  if (!sensorEvent?.requestPermission) return "granted";
+
+  try {
+    return await sensorEvent.requestPermission();
+  } catch {
+    return "denied";
+  }
 }
 
 async function readDelimited(file: File): Promise<Record<string, unknown>[]> {
