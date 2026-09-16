@@ -534,7 +534,7 @@ async function readXlsx(file: File): Promise<Record<string, unknown>[]> {
   const sheetName = pickTreeSheetName(workbook);
   const sheet = workbook.Sheets[sheetName];
   repairSheetRange(sheet);
-  const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: "" });
+  const rows = matrixToTreeRows(XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: "" }));
   return rows.length > 0 ? rows : readBrokenDimensionSheet(workbook, workbook.SheetNames.indexOf(sheetName));
 }
 
@@ -581,20 +581,16 @@ function readBrokenDimensionSheet(workbook: XLSX.WorkBook, sheetIndex: number): 
   const documentXml = new DOMParser().parseFromString(sheetXml, "application/xml");
   const rows = [...documentXml.getElementsByTagName("row")].map((row) => {
     const cells = [...row.getElementsByTagName("c")];
-    return cells.map((cell) => readCellValue(cell, sharedStrings));
+    const values: string[] = [];
+    for (const cell of cells) {
+      const address = cell.getAttribute("r");
+      if (!address) continue;
+      values[XLSX.utils.decode_cell(address).c] = readCellValue(cell, sharedStrings);
+    }
+    return values;
   });
 
-  const [headers, ...body] = rows;
-  if (!headers) return [];
-
-  return body
-    .filter((row) => row.some(Boolean))
-    .map((row) =>
-      headers.reduce<Record<string, unknown>>((record, header, index) => {
-        if (header) record[header] = row[index] ?? "";
-        return record;
-      }, {}),
-    );
+  return matrixToTreeRows(rows);
 }
 
 function readSharedStrings(files: Record<string, { content?: Uint8Array } | string> | undefined, decoder: TextDecoder) {
@@ -612,6 +608,20 @@ function readCellValue(cell: Element, sharedStrings: string[]) {
   const rawValue = cell.getElementsByTagName("v")[0]?.textContent ?? "";
   if (cell.getAttribute("t") === "s") return sharedStrings[Number(rawValue)] ?? "";
   return rawValue;
+}
+
+function matrixToTreeRows(rows: unknown[][]): Record<string, unknown>[] {
+  return rows
+    .slice(1)
+    .filter((row) => row[1] || row[2])
+    .map((row, index) => ({
+      sourceId: String(row[0] || `tree-${index + 1}`),
+      speciesCommonName: String(row[1] || "").trim(),
+      category: String(row[2] || "").trim(),
+      heightM: row[3],
+      dbhCm: row[4],
+      storedCo2Kg: row[5],
+    }));
 }
 
 function normalizeRows(rows: Record<string, unknown>[]): TreeReference[] {
