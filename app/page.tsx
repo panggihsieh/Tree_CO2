@@ -9,6 +9,7 @@ import {
   Check,
   ChevronRight,
   Download,
+  ExternalLink,
   FileSpreadsheet,
   Leaf,
   LocateFixed,
@@ -87,6 +88,7 @@ export default function Home() {
   const [cameraActive, setCameraActive] = useState(false);
   const [aiRunning, setAiRunning] = useState(false);
   const [candidates, setCandidates] = useState<SpeciesCandidate[]>([]);
+  const [geminiMessage, setGeminiMessage] = useState("");
   const [confirmedSpecies, setConfirmedSpecies] = useState(sampleTreeReferences[0]?.speciesCommonName ?? "");
   const [selectedTreeId, setSelectedTreeId] = useState(sampleTreeReferences[0]?.sourceId ?? "");
   const [dbhCm, setDbhCm] = useState(sampleTreeReferences[0]?.dbhCm ? String(sampleTreeReferences[0].dbhCm) : "");
@@ -219,6 +221,25 @@ export default function Home() {
     setConfirmedSpecies(ranked[0]?.name ?? "");
     setAiRunning(false);
     setStep(3);
+  }
+
+  async function openGeminiLive() {
+    const campusSpecies = speciesSummary.slice(0, 20).map((item) => item.name).join("、");
+    const prompt = [
+      "請用繁體中文協助確認校園樹木種類。",
+      "請我用 iPad 鏡頭依序拍攝葉片正反面、枝條、樹皮、整棵樹冠，並提出觀察問題。",
+      `本校清冊常見樹種包含：${campusSpecies || "請依現場影像判斷"}`,
+      "請先給 3 個可能樹種，說明辨識依據，最後提醒我回到 TreeCarbon EDU 填入確認樹種。",
+    ].join("\n");
+
+    try {
+      await navigator.clipboard.writeText(prompt);
+      setGeminiMessage("已複製確認提示詞，請在 Gemini 貼上後開啟 Live。");
+    } catch {
+      setGeminiMessage("已開啟 Gemini。若無法自動複製，請口頭請 Gemini 協助確認樹種。");
+    }
+
+    window.open("https://gemini.google.com/app", "_blank", "noopener,noreferrer");
   }
 
   function saveRecord() {
@@ -406,6 +427,7 @@ export default function Home() {
                 <div className="camera-actions">
                   <Button variant="secondary" onClick={startCamera}><Camera /> 開啟相機</Button>
                   <Button onClick={runMockAI} disabled={aiRunning}><Sparkles /> {aiRunning ? "辨識中" : "模擬 AI 辨識"}</Button>
+                  <Button className="wide-action" variant="outline" onClick={openGeminiLive}><ExternalLink /> 開新頁面用 Gemini Live 確認</Button>
                 </div>
               </div>
             </div>
@@ -413,6 +435,12 @@ export default function Home() {
               <Sparkles />
               <h2>辨識不是最終答案</h2>
               <p>AI 只提供候選樹種。請學生觀察葉形、樹皮、樹高與清冊位置，再由學生或教師確認。</p>
+              <div className="gemini-live-card">
+                <strong>Gemini Live 現場互動</strong>
+                <p>在 iPad 或 iPhone 開新頁面到 Gemini，貼上提示詞後點 Live 或向左滑，用鏡頭與語音確認葉片、樹皮與樹冠。</p>
+                <Button variant="outline" onClick={openGeminiLive}><ExternalLink /> 開啟 Gemini</Button>
+                {geminiMessage && <span>{geminiMessage}</span>}
+              </div>
               <div className="mini-list">
                 <span>拍攝葉片近照</span>
                 <span>拍攝樹幹紋理</span>

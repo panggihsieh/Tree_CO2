@@ -419,10 +419,28 @@ button { min-height: 44px; }
   grid-template-columns: 1fr 1fr;
   gap: 10px;
 }
+.camera-actions .wide-action { grid-column: 1 / -1; background: #fff; }
 .guide-panel, .form-panel, .result-panel { padding: 22px; }
 .guide-panel > svg { width: 42px; height: 42px; padding: 9px; color: #fff; background: #245b45; border-radius: 8px; }
 .guide-panel h2 { margin: 15px 0 8px; font-size: 24px; }
 .guide-panel p { color: #65736b; line-height: 1.7; }
+.gemini-live-card {
+  margin-top: 16px;
+  padding: 14px;
+  display: grid;
+  gap: 9px;
+  border: 1px solid #d8e2d7;
+  border-radius: 8px;
+  background: #f7faf6;
+}
+.gemini-live-card strong { color: #203a30; font-size: 14px; }
+.gemini-live-card p { margin: 0; color: #607066; font-size: 13px; line-height: 1.6; }
+.gemini-live-card button { width: 100%; }
+.gemini-live-card span {
+  color: #2f6e50;
+  font-size: 12px;
+  line-height: 1.45;
+}
 .mini-list { display: grid; gap: 8px; margin-top: 18px; }
 .mini-list span { padding: 11px 12px; background: #f0f4ef; border-radius: 8px; font-size: 13px; font-weight: 700; }
 
